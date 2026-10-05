@@ -44,6 +44,11 @@ class _CustomerDashboardState extends ConsumerState<CustomerDashboard> {
             o.status != OrderStatus.cancelled)
         .toList();
 
+    // Completed/Delivered orders for order history tracking
+    final recentDeliveredOrders = platform.orders
+        .where((o) => o.status == OrderStatus.delivered)
+        .toList();
+
     final filteredKitchens = platform.kitchens.where((k) {
       final matchesSearch = k.name.toLowerCase().contains(_searchQuery.toLowerCase()) ||
           k.cuisines.any((c) => c.toLowerCase().contains(_searchQuery.toLowerCase()));
@@ -108,73 +113,60 @@ class _CustomerDashboardState extends ConsumerState<CustomerDashboard> {
                 ),
               ),
 
-              // Active Order Alert Bar (if customer has an active order)
-              if (activeOrders.isNotEmpty)
+              // Multi-Order Tracking Section for Customers (Renders each active & recently delivered order)
+              if (activeOrders.isNotEmpty || recentDeliveredOrders.isNotEmpty)
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                    child: InkWell(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => OrderTrackingView(orderId: activeOrders.first.id),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (activeOrders.isNotEmpty) ...[
+                          Row(
+                            children: [
+                              Text(
+                                'Active Orders (${activeOrders.length})',
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: AppTheme.textDark),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFFFF7ED),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: const Color(0xFFFFD8BF)),
+                                ),
+                                child: const Text('Live Tracking', style: TextStyle(color: AppTheme.primaryOrange, fontSize: 10, fontWeight: FontWeight.bold)),
+                              ),
+                            ],
                           ),
-                        );
-                      },
-                      borderRadius: BorderRadius.circular(14),
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFF7ED),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: const Color(0xFFFFD8BF)),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.02),
-                              blurRadius: 6,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(
-                                color: AppTheme.primaryOrange.withOpacity(0.15),
-                                shape: BoxShape.circle,
+                          const SizedBox(height: 8),
+                          ...activeOrders.map((order) => _buildOrderTrackerCard(context, order, isActive: true)),
+                          const SizedBox(height: 4),
+                        ],
+                        if (recentDeliveredOrders.isNotEmpty) ...[
+                          Row(
+                            children: [
+                              Text(
+                                'Recently Delivered (${recentDeliveredOrders.length})',
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.textMuted),
                               ),
-                              child: const Icon(Icons.moped, color: AppTheme.primaryOrange, size: 20),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Active Order #${activeOrders.first.id} • ${activeOrders.first.status.label}',
-                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.textDark),
-                                  ),
-                                  Text(
-                                    'Kitchen: ${activeOrders.first.kitchenName}',
-                                    style: const TextStyle(color: AppTheme.textMuted, fontSize: 11),
-                                  ),
-                                ],
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFDCFCE7),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: const Color(0xFF86EFAC)),
+                                ),
+                                child: const Text('Delivered', style: TextStyle(color: AppTheme.emeraldGreen, fontSize: 10, fontWeight: FontWeight.bold)),
                               ),
-                            ),
-                            const Text(
-                              'Track Live',
-                              style: TextStyle(
-                                color: AppTheme.primaryOrange,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                              ),
-                            ),
-                            const Icon(Icons.arrow_forward_ios, size: 12, color: AppTheme.primaryOrange),
-                          ],
-                        ),
-                      ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          ...recentDeliveredOrders.take(2).map((order) => _buildOrderTrackerCard(context, order, isActive: false)),
+                        ],
+                      ],
                     ),
                   ),
                 ),
@@ -578,6 +570,121 @@ class _CustomerDashboardState extends ConsumerState<CustomerDashboard> {
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildOrderTrackerCard(BuildContext context, OrderModel order, {required bool isActive}) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: InkWell(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => OrderTrackingView(orderId: order.id),
+            ),
+          );
+        },
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: isActive ? const Color(0xFFFFF7ED) : Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isActive ? const Color(0xFFFFD8BF) : AppTheme.lightDivider,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.02),
+                blurRadius: 6,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: (isActive ? AppTheme.primaryOrange : AppTheme.emeraldGreen).withOpacity(0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  isActive ? Icons.moped : Icons.check_circle,
+                  color: isActive ? AppTheme.primaryOrange : AppTheme.emeraldGreen,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            'Order #${order.id}',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.textDark),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                          decoration: BoxDecoration(
+                            color: order.status.statusColor.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            order.status.label,
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: order.status == OrderStatus.delivered
+                                  ? AppTheme.emeraldGreen
+                                  : order.status.statusColor,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${order.kitchenName} • ${order.items.length} ${order.items.length == 1 ? 'item' : 'items'} (₹${order.pricing.finalPayable.toStringAsFixed(0)})',
+                      style: const TextStyle(color: AppTheme.textMuted, fontSize: 11),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    isActive ? 'Track Live' : 'View Details',
+                    style: TextStyle(
+                      color: isActive ? AppTheme.primaryOrange : AppTheme.emeraldGreen,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                  Icon(
+                    Icons.arrow_forward_ios,
+                    size: 11,
+                    color: isActive ? AppTheme.primaryOrange : AppTheme.emeraldGreen,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -5,13 +5,26 @@ import '../../auth/domain/user_role.dart';
 import '../../data/kitchen_repository.dart';
 import '../../models/order_model.dart';
 
-class OrderTrackingView extends ConsumerWidget {
+class OrderTrackingView extends ConsumerStatefulWidget {
   final String orderId;
 
   const OrderTrackingView({super.key, required this.orderId});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<OrderTrackingView> createState() => _OrderTrackingViewState();
+}
+
+class _OrderTrackingViewState extends ConsumerState<OrderTrackingView> {
+  late String _currentOrderId;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentOrderId = widget.orderId;
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final session = ref.watch(userSessionProvider);
 
     // Strict Role Guard: Order tracking is only visible to customers
@@ -83,8 +96,8 @@ class OrderTrackingView extends ConsumerWidget {
 
     final platform = ref.watch(platformProvider);
     final order = platform.orders.firstWhere(
-      (o) => o.id == orderId,
-      orElse: () => platform.orders.first,
+      (o) => o.id == _currentOrderId,
+      orElse: () => platform.orders.isNotEmpty ? platform.orders.first : null as dynamic,
     );
 
     final steps = [
@@ -111,13 +124,62 @@ class OrderTrackingView extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          // Multi-Order Tab Selector (if customer has multiple orders)
+          if (platform.orders.length > 1) ...[
+            Container(
+              margin: const EdgeInsets.only(bottom: 14),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: platform.orders.map((o) {
+                    final isSelected = o.id == _currentOrderId;
+                    final isDelivered = o.status == OrderStatus.delivered;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        selected: isSelected,
+                        avatar: Icon(
+                          isDelivered ? Icons.check_circle : Icons.moped,
+                          size: 14,
+                          color: isSelected ? Colors.white : (isDelivered ? AppTheme.emeraldGreen : AppTheme.primaryOrange),
+                        ),
+                        label: Text('Order #${o.id} • ${o.status.label}'),
+                        selectedColor: isDelivered ? AppTheme.emeraldGreen : AppTheme.primaryOrange,
+                        backgroundColor: Colors.white,
+                        side: BorderSide(
+                          color: isSelected
+                              ? Colors.transparent
+                              : (isDelivered ? const Color(0xFF86EFAC) : const Color(0xFFFFD8BF)),
+                        ),
+                        labelStyle: TextStyle(
+                          fontSize: 12,
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                          color: isSelected ? Colors.white : AppTheme.textDark,
+                        ),
+                        onSelected: (_) {
+                          setState(() => _currentOrderId = o.id);
+                        },
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+          ],
+
           // Estimated Delivery Time Header Card
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: const Color(0xFFFFF7ED),
+              color: order.status == OrderStatus.delivered
+                  ? const Color(0xFFDCFCE7)
+                  : const Color(0xFFFFF7ED),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFFFD8BF)),
+              border: Border.all(
+                color: order.status == OrderStatus.delivered
+                    ? const Color(0xFF86EFAC)
+                    : const Color(0xFFFFD8BF),
+              ),
               boxShadow: [
                 BoxShadow(
                   color: Colors.black.withOpacity(0.02),
@@ -134,12 +196,14 @@ class OrderTrackingView extends ConsumerWidget {
                     children: [
                       Text(
                         order.status == OrderStatus.delivered
-                            ? 'Order Delivered!'
+                            ? 'Order Delivered! 🎉'
                             : 'Arriving in ~${order.estimatedTimeMinutes} mins',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
-                          color: AppTheme.primaryOrange,
+                          color: order.status == OrderStatus.delivered
+                              ? AppTheme.emeraldGreen
+                              : AppTheme.primaryOrange,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -157,7 +221,13 @@ class OrderTrackingView extends ConsumerWidget {
                       const SizedBox(height: 6),
                       Row(
                         children: [
-                          const Icon(Icons.verified, size: 14, color: AppTheme.emeraldGreen),
+                          Icon(
+                            Icons.verified,
+                            size: 14,
+                            color: order.status == OrderStatus.delivered
+                                ? AppTheme.emeraldGreen
+                                : AppTheme.emeraldGreen,
+                          ),
                           const SizedBox(width: 4),
                           Expanded(
                             child: Text(
@@ -175,14 +245,19 @@ class OrderTrackingView extends ConsumerWidget {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: AppTheme.primaryOrange.withOpacity(0.12),
+                    color: (order.status == OrderStatus.delivered
+                            ? AppTheme.emeraldGreen
+                            : AppTheme.primaryOrange)
+                        .withOpacity(0.12),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
                     order.status == OrderStatus.delivered
-                        ? Icons.check
+                        ? Icons.check_circle
                         : Icons.delivery_dining,
-                    color: AppTheme.primaryOrange,
+                    color: order.status == OrderStatus.delivered
+                        ? AppTheme.emeraldGreen
+                        : AppTheme.primaryOrange,
                     size: 28,
                   ),
                 ),
@@ -254,7 +329,9 @@ class OrderTrackingView extends ConsumerWidget {
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             color: isCompleted
-                                ? (isCurrent ? AppTheme.primaryOrange : AppTheme.emeraldGreen)
+                                ? ((isCurrent && order.status != OrderStatus.delivered)
+                                    ? AppTheme.primaryOrange
+                                    : AppTheme.emeraldGreen)
                                 : const Color(0xFFE9ECEF),
                           ),
                           child: Icon(

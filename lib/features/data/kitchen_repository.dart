@@ -728,13 +728,13 @@ class PlatformNotifier extends Notifier<PlatformState> {
       riderName: riderName,
     );
 
-    // Update order with rider information
+    // Update order with rider information without regressing preparation status
     final updatedOrders = state.orders.map((o) {
-      if (o.id == task.orderId) {
+      if (o.id.trim().toLowerCase() == task.orderId.trim().toLowerCase()) {
         return o.copyWith(
           deliveryPartnerName: riderName,
           deliveryPartnerPhone: riderPhone,
-          status: OrderStatus.accepted,
+          status: (o.status == OrderStatus.placed) ? OrderStatus.accepted : o.status,
         );
       }
       return o;
@@ -766,6 +766,7 @@ class PlatformNotifier extends Notifier<PlatformState> {
         break;
       case DeliveryStage.enRouteToKitchen:
         nextStage = DeliveryStage.atKitchen;
+        correspondingOrderStatus = OrderStatus.readyForPickup;
         break;
       case DeliveryStage.atKitchen:
         nextStage = DeliveryStage.outForDelivery;
@@ -786,7 +787,7 @@ class PlatformNotifier extends Notifier<PlatformState> {
     // Update order and free up kitchen capacity if delivered
     var updatedKitchens = state.kitchens;
     final updatedOrders = state.orders.map((o) {
-      if (o.id == task.orderId) {
+      if (o.id.trim().toLowerCase() == task.orderId.trim().toLowerCase()) {
         if (correspondingOrderStatus == OrderStatus.delivered) {
           // Release kitchen slot!
           updatedKitchens = state.kitchens.map((k) {
